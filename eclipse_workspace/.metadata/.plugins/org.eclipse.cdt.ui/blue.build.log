@@ -1,0 +1,16 @@
+19:53:14 **** Incremental Build of configuration Default for project blue ****
+make -C src all 
+make: Entering directory `/works/blue/eclipse_workspace/blue/src'
+make -C kernel
+make[1]: Entering directory `/works/blue/eclipse_workspace/blue/src/kernel'
+nasm init/jumper.asm -o init/jumper.bin
+xxd -i init/jumper.bin > gen/jumper.h
+ld -melf_x86_64 -T blue.ld -nostdlib -o kernel.elf cpu/fault.o cpu/gdt.o cpu/idt.o cpu/interrupt.o cpu/io_apic.o cpu/local_apic.o cpu/multiprocessor.o cpu/syscall.o device/console.o device/keyboard.o device/pic.o device/pit.o ds/list.o ds/queue.o init/main.o mem/dynamic.o mem/page.o misc/builtinshell.o misc/printk.o misc/synchronization.o misc/util.o sys/scheduler.o sys/task.o cpu/isr.o init/header.o misc/asm_util.o
+objcopy -j .text -j .data -j .rodata -j .bss --set-section-flags .bss=alloc,load,contents -S -O binary kernel.elf kernel.bin
+make[1]: Leaving directory `/works/blue/eclipse_workspace/blue/src/kernel'
+cat grub_header kernel/kernel.bin bash > vmlinuz-0-blue
+objdump -D kernel/kernel.elf > kernel.dump
+make: Leaving directory `/works/blue/eclipse_workspace/blue/src'
+
+19:53:15 Build Finished (took 174ms)
+

@@ -1,0 +1,267 @@
+#include "task.h"
+#include "gdt.h"
+#include "multiprocessor.h"
+#include "scheduler.h"
+#include "dynamic.h"
+#include "list.h"
+#include "synchronization.h"
+#include "util.h"
+
+extern scheduler_t scheduler[CORE_COUNT];
+
+tcb_t* create_task(QWORD flags, void* mem_addr, QWORD mem_size,
+QWORD entry_addr) {
+	tcb_t *task, *cur_task;
+	void* stack_addr;
+	BYTE core;
+
+	core = get_core_num();
+
+	task = kmalloc(sizeof(tcb_t));
+	memset(task, 0, sizeof(tcb_t));
+	stack_addr = kmalloc(KERNEL_STACK_SIZE);
+
+	/*
+	 * lock start
+	 */
+	spinlock_lock(&(scheduler[core].spinlock));
+
+	cur_task = get_proc_if_thread(get_cur_task(core));
+
+	// if thread creation
+	if (flags & TASK_FLAGS_THREAD) {
+		task->parent_process = cur_task;
+		task->mem_addr = cur_task->mem_addr;
+		task->mem_size = cur_task->mem_size;
+
+		list_add_to_tail(&(cur_task->child_list), &(task->thread_link));
+	}
+	// else, it's process creation
+	else {
+		task->parent_process = cur_task;
+		task->mem_addr = mem_addr;
+		task->mem_size = mem_size;
+
+		list_init(&(task->child_list));
+	}
+
+	task->name = strdup("unknown");
+
+	spinlock_unlock(&(scheduler[core].spinlock));
+	/*
+	 * lock end
+	 */
+
+	setup_task(task, flags, entry_addr, stack_addr,
+	KERNEL_STACK_SIZE);
+
+	task->fpu_used = FALSE;
+	task->core = core;
+	task->sched_link.value = task;
+
+	add_task_to_ready_list(task); // criny
+	return task;
+}
+
+void setup_task(tcb_t* task, QWORD flags, QWORD entry_addr, void* stack_addr,
+QWORD stack_size) {
+	memset(&(task->context), 0, sizeof(regs_t));
+
+	task->context.rsp = (QWORD ) stack_addr + stack_size - 8;
+	task->context.rbp = (QWORD ) stack_addr + stack_size - 8;
+	task->context.rip = entry_addr;
+
+	// set IE(9) : Enable interrupt receive
+	// set 3 to IOPL(12-13) : Enable I/O access in user level
+	task->context.rflags |= 0x3200; // criny
+
+	if ((flags & TASK_FLAGS_USERLEVEL) == 0) {
+		task->context.cs = GDT_KERNELCODESEGMENT | SELECTOR_RPL_0;
+		task->context.ds = GDT_KERNELDATASEGMENT | SELECTOR_RPL_0;
+		task->context.es = GDT_KERNELDATASEGMENT | SELECTOR_RPL_0;
+		task->context.fs = GDT_KERNELDATASEGMENT | SELECTOR_RPL_0;
+		task->context.gs = GDT_KERNELDATASEGMENT | SELECTOR_RPL_0;
+		task->context.ss = GDT_KERNELDATASEGMENT | SELECTOR_RPL_0;
+	} else {
+		task->context.cs = GDT_USERCODESEGMENT | SELECTOR_RPL_3;
+		task->context.ds = GDT_USERDATASEGMENT | SELECTOR_RPL_3;
+		task->context.es = GDT_USERDATASEGMENT | SELECTOR_RPL_3;
+		task->context.fs = GDT_USERDATASEGMENT | SELECTOR_RPL_3;
+		task->context.gs = GDT_USERDATASEGMENT | SELECTOR_RPL_3;
+		task->context.ss = GDT_USERDATASEGMENT | SELECTOR_RPL_3;
+	}
+
+	// set task exit gate
+	*(QWORD *) ((QWORD) stack_addr + stack_size - 8) = (QWORD ) kill_me;
+
+	task->stack_addr = stack_addr;
+	task->stack_size = stack_size;
+	task->flags = flags;
+}
+
+extern pml4_t *kernel_pml4;
+
+void be_a_init(void) {
+	tcb_t* task;
+	int core;
+
+	core = get_core_num();
+
+	task = kmalloc(sizeof(tcb_t));
+	memset(task, 0, sizeof(tcb_t));
+
+	// set attribute
+	task->id = 1;
+	task->name = strdup("init");
+	task->parent_process = task; // if parent_process is itself, it's must init process
+	task->core = core;
+	task->flags = TASK_FLAGS_PROCESS | TASK_FLAGS_SYSTEM | TASK_FLAGS_IDLE;
+	task->sched_link.value = task;
+	task->pml4 = kernel_pml4;
+
+	switch_pml4(task->pml4);
+
+	// register in scheduler
+	set_cur_task(0, task);
+
+	printk("Init task created\n");
+}
+
+/*
+ * parent process : return child pid
+ * child process  : return 0
+ *
+ * - allocate child's process table entry
+ * - fill child's entry from parent
+ * - allocate child's stack and user area
+ * - fill child's user area from parent
+ * - allocate PID for child
+ * - set up child to share parent's text
+ * - copy page tables for data and stack
+ * - set up sharing of open files
+ * - copy parent's registers to child
+ */
+
+#define PUSH(stack, type, item) stack -= sizeof(type); \
+							*((type *) stack) = item
+
+tcb_t* spawn_process(volatile tcb_t* parent);
+
+int fork(void) {
+	QWORD rsp, rbp;
+
+	disable_intr();
+
+	tcb_t* parent = get_cur_task(get_core_num());
+	parent->context.rax = 0;
+	printk("[[%s]]", parent->name);
+	criny;
+
+	/* Clone the current process' page directory */
+	pml4_t * pml4 = clone_pml4(parent->pml4);
+
+	/* Spawn a new process from this one */
+	tcb_t* child = spawn_process(parent);
+
+	/* Set the new process' page directory to clone */
+	child->pml4 = pml4;
+
+	memcpy(&(child->context), &(parent->context), sizeof(regs_t));
+
+	rsp = child->image.kernel_stack;
+	rbp = rsp;
+
+	child->context.rax = 0;
+
+	// PUSH(stack, type, item)
+	PUSH(rsp, regs_t, child->context);
+
+	child->context.rsp = rsp;
+	child->context.rbp = rbp;
+
+	child->is_tasklet = parent->is_tasklet;
+
+	child->context.rip = 0;//&return_to_userspace;
+
+	/* Add the new process to the ready queue */
+	//make_process_ready(new_proc);
+	add_task_to_ready_list(child);
+
+	enable_intr();
+
+	/* Return the child PID */
+	return child->id;
+}
+
+/*
+ * Spawn a new process.
+ *
+ * @param parent The parent process to spawn the new one off of.
+ * @return A pointer to the new process.
+ */
+int next_pid;
+
+#define SHM_START 0x0000700000000000
+
+fs_node_t *clone_fs(fs_node_t *source) {
+	if (!source) {
+		return NULL;
+	}
+	fs_node_t *n = kmalloc(sizeof(fs_node_t));
+	memcpy(n, source, sizeof(fs_node_t));
+	return n;
+}
+
+tcb_t* spawn_process(volatile tcb_t* parent) {
+	/* Allocate a new process */
+	tcb_t* proc = kmalloc(sizeof(tcb_t));
+
+	proc->id = next_pid++; /* Set its PID */
+	proc->gid = proc->id; /* Set the GID */
+	proc->name = strdup("default_name"); /* Use the default name */
+
+	/* Copy permissions */
+	proc->user = parent->user;
+	proc->mask = parent->mask;
+
+	/* Zero out the ESP/EBP/EIP */
+	proc->context.rsp = 0;
+	proc->context.rbp = 0;
+	proc->context.rip = 0;
+	proc->fpu_used = 0;
+
+	/* Set the process image information from the parent */
+	proc->image.entry = parent->image.entry;
+	proc->image.heap = parent->image.heap;
+	proc->image.heap_actual = parent->image.heap_actual;
+	proc->image.size = parent->image.size;
+	proc->image.kernel_stack = kmalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	proc->image.user_stack = parent->image.user_stack;
+	proc->image.shm_heap = SHM_START; /* Yeah, a bit of a hack. */
+
+	/* Clone the file descriptors from the original process */
+	proc->fds = kmalloc(sizeof(fd_table_t));
+	proc->fds->refs = 1;
+	proc->fds->length = parent->fds->length;
+	proc->fds->capacity = parent->fds->capacity;
+	proc->fds->entries = kmalloc(sizeof(fs_node_t *) * proc->fds->capacity);
+	for (int i = 0; i < parent->fds->length; ++i) {
+		proc->fds->entries[i] = clone_fs(parent->fds->entries[i]);
+	}
+
+	/* As well as the working directory */
+	//proc->wd_node = clone_fs(parent->wd_node);
+	//proc->wd_name = strdup(parent->wd_name);
+	/* Zero out the process status */
+	memset(proc->signals.functions, 0x00, sizeof(QWORD) * NUMSIGNALS);
+	proc->signal_kstack = NULL; /* None yet initialized */
+
+	proc->is_tasklet = 0;
+
+	/* Insert the process into the process tree as a child
+	 * of the parent process. */
+
+	/* Return the new process */
+	return proc;
+}
+

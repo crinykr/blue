@@ -1,0 +1,142 @@
+#include "task.h"
+#include "gdt.h"
+#include "multiprocessor.h"
+#include "scheduler.h"
+#include "dynamic.h"
+#include "list.h"
+#include "synchronization.h"
+#include "util.h"
+#include "sys.h"
+
+extern scheduler_t scheduler;
+
+extern pml4_t *kernel_pml4;
+
+void be_a_init(void) {
+	tcb_t* task;
+	int core;
+
+	core = get_core_num();
+
+	task = kmalloc(sizeof(tcb_t));
+	memset(task, 0, sizeof(tcb_t));
+
+	// set attribute
+	task->id = 1;
+	task->name = strdup("init");
+	task->parent_process = task; // if parent_process is itself, it's must init process
+	task->core = core;
+	task->flags = TASK_FLAGS_PROCESS | TASK_FLAGS_SYSTEM | TASK_FLAGS_IDLE;
+	task->sched_link.value = task;
+	task->pml4 = kernel_pml4;
+
+	switch_pml4(task->pml4);
+
+	// register in scheduler
+	set_cur_task(0, task);
+
+	// etc
+	task->image.kernel_stack = &STACK_CORE0;
+
+	printk("init task [created]\n");
+}
+
+/*
+ * parent process : return child pid
+ * child process  : return 0
+ *
+ * - allocate child's process table entry
+ * - fill child's entry from parent
+ * - allocate child's stack and user area
+ * - fill child's user area from parent
+ * - allocate PID for child
+ * - set up child to share parent's text
+ * - copy page tables for data and stack
+ * - set up sharing of open files
+ * - copy parent's registers to child
+ */
+
+#define PUSH(stack, type, item) stack -= sizeof(type); \
+							*((type *) stack) = item
+
+tcb_t* spawn_process(volatile tcb_t* parent);
+
+int next_pid = 2;
+
+void fork() {
+	QWORD rsp, rbp;
+
+	tcb_t *parent = get_cur_task(get_core_num());
+
+	parent->context.rax = next_pid; // weird... "get_pid()" using sync lock is better
+	parent->context.rip += 5; // To skip "b8 00 00 00 00(mov $0x0, %eax)"
+
+	tcb_t *child = spawn_process(parent);
+
+	/* Set the new process' page directory to clone */
+	/* Clone the current process' page directory */
+	//child->pml4 = clone_pml4(parent->pml4); if thread creation, this is useless
+	//memcpy(&(child->context), &(parent->context), sizeof(regs_t));
+	//
+	//rsp = child->image.kernel_stack;
+	//rbp = rsp;
+	child->context.rax = 0; // weird... "get_pid()" using sync lock is better
+
+	/* Do etc stuffs */
+	child->sched_link.value = child;
+
+	// PUSH(stack, type, item)
+	//PUSH(rsp, regs_t, child->context);
+
+	//child->context.rsp = rsp;
+	//child->context.rbp = rbp;
+
+	//child->context.rip = 0; //&return_to_userspace;
+
+	/* Add the new process to the ready queue */
+	//make_process_ready(new_proc);
+	add_task_to_ready_list(child);
+
+	//criny(0x546890);
+
+	// enable_intr();
+
+	/* Return the child PID */
+	//return child->id;
+}
+
+/*
+ * Spawn a new process.
+ *
+ * @param parent The parent process to spawn the new one off of.
+ * @return A pointer to the new process.
+ */
+
+#define SHM_START 0x0000700000000000
+
+tcb_t* spawn_process(volatile tcb_t* parent) {
+	/* <Task types> : No Kernel Thread in Blue
+	 *
+	 * 1. user process
+	 *
+	 * 2. user thread
+	 */
+
+	tcb_t *child = kmalloc(sizeof(tcb_t));
+
+	child->id = next_pid++; // getpid() is better~!
+	child->name = strdup("default_name");
+	child->parent_process = parent;
+	child->core = 0xff; // core number 0xff means "the task is virgin"
+	child->fpu_used = 0;
+	child->image.kernel_stack = kmalloc(KERNEL_STACK_SIZE);
+
+	memcpy(&(child->context), &(parent->context), sizeof(regs_t));
+
+	// right now, just modify recent rsp and rbp value... I guess it's the reason of why THREAD_CREATION_API use subrutine function name
+	child->context.rsp = child->context.rbp = child->image.kernel_stack
+			+ KERNEL_STACK_SIZE;
+
+	return child;
+}
+

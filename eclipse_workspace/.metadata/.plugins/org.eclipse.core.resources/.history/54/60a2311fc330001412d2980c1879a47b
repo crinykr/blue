@@ -1,0 +1,393 @@
+/*
+ * printk.c
+ *
+ *  Created on: 2014. 8. 24.
+ *      Author: criny
+ */
+
+#include "printk.h"
+#include "console.h"
+#include "synchronization.h"
+
+/*
+ * Integer to string
+ */
+void print_dec(QWORD value, QWORD width, char * buf,
+QWORD * ptr) {
+	QWORD n_width = 1;
+	QWORD i = 9;
+
+	while (value > i && i < UINT64_MAX) {
+		n_width += 1;
+		i *= 10;
+		i += 9;
+	}
+
+	int printed = 0;
+	while (n_width + printed < width) {
+		buf[*ptr] = '0';
+		*ptr += 1;
+		printed += 1;
+	}
+
+	i = n_width;
+	while (i > 0) {
+		QWORD n = value / 10;
+		QWORD r = value % 10;
+		buf[*ptr + i - 1] = r + '0';
+		i--;
+		value = n;
+	}
+	*ptr += n_width;
+}
+
+/*
+ * Hexadecimal to string
+ */
+void print_hex(QWORD value, QWORD width, char * buf,
+QWORD * ptr) {
+	QWORD i = width;
+
+	if (i == 0)
+		i = 16;
+
+	QWORD n_width = 1;
+	QWORD j = 0x0F;
+	while (value > j && j < UINT64_MAX) {
+		n_width += 1;
+		j *= 0x10;
+		j += 0x0F;
+	}
+
+	while (i > (QWORD) n_width) {
+		buf[*ptr] = '0';
+		*ptr += 1;
+		i--;
+	}
+
+	i = (QWORD) n_width;
+	while (i-- > 0) {
+		buf[*ptr] = "0123456789abcdef"[(value >> (i * 4)) & 0xF];
+		*ptr += +1;
+	}
+}
+
+/*
+ * vasprintf()
+ */
+size_t vasprintf(char * buf, const char *fmt, va_list args) {
+	QWORD i = 0;
+	char *s;
+	QWORD ptr = 0;
+	QWORD len = strlen(fmt);
+	for (; i < len && fmt[i]; ++i) {
+		if (fmt[i] != '%') {
+			buf[ptr++] = fmt[i];
+			continue;
+		}
+		++i;
+		QWORD arg_width = 0;
+		while (fmt[i] >= '0' && fmt[i] <= '9') {
+			arg_width *= 10;
+			arg_width += fmt[i] - '0';
+			++i;
+		}
+		/* fmt[i] == '%' */
+		switch (fmt[i]) {
+		case 's': /* String pointer -> String */
+			s = (char *) va_arg(args, char *);
+			while (*s) {
+				buf[ptr++] = *s++;
+			}
+			break;
+		case 'c': /* Single character */
+			buf[ptr++] = (char) va_arg(args, int);
+			break;
+		case 'x': /* Hexadecimal number */
+			print_hex((unsigned long) va_arg(args, unsigned long), arg_width,
+					buf, &ptr);
+			break;
+		case 'd': /* Decimal number */
+			print_dec((QWORD) va_arg(args, QWORD), arg_width,
+					buf, &ptr);
+			break;
+		case '%': /* Escape */
+			buf[ptr++] = '%';
+			break;
+		default: /* Nothing at all, just dump it */
+			buf[ptr++] = fmt[i];
+			break;
+		}
+	}
+	/* Ensure the buffer ends in a null */
+	buf[ptr] = '\0';
+	return ptr;
+}
+
+
+/**
+ *  문자열의 순서를 뒤집음
+ */
+static void kReverseString(char* pcBuffer) {
+	int iLength;
+	int i;
+	char cTemp;
+
+	// 문자열의 가운데를 중심으로 좌/우를 바꿔서 순서를 뒤집음
+	iLength = strlen(pcBuffer);
+	for (i = 0; i < iLength / 2; i++) {
+		cTemp = pcBuffer[i];
+		pcBuffer[i] = pcBuffer[iLength - 1 - i];
+		pcBuffer[iLength - 1 - i] = cTemp;
+	}
+}
+
+/**
+ *  16진수 값을 문자열로 변환
+ */
+static int kHexToString(QWORD qwValue, char* pcBuffer) {
+	QWORD i;
+	QWORD qwCurrentValue;
+
+	// 0이 들어오면 바로 처리
+	if (qwValue == 0) {
+		pcBuffer[0] = '0';
+		pcBuffer[1] = '\0';
+		return 1;
+	}
+
+	// 버퍼에 1의 자리부터 16, 256, ...의 자리 순서로 숫자 삽입
+	for (i = 0; qwValue > 0; i++) {
+		qwCurrentValue = qwValue % 16;
+		if (qwCurrentValue >= 10) {
+			pcBuffer[i] = 'A' + (qwCurrentValue - 10);
+		} else {
+			pcBuffer[i] = '0' + qwCurrentValue;
+		}
+
+		qwValue = qwValue / 16;
+	}
+	pcBuffer[i] = '\0';
+
+	// 버퍼에 들어있는 문자열을 뒤집어서 ... 256, 16, 1의 자리 순서로 변경
+	kReverseString(pcBuffer);
+	return i;
+}
+
+/**
+ *  10진수 값을 문자열로 변환
+ */
+static  int kDecimalToString(long lValue, char* pcBuffer) {
+	long i;
+
+	// 0이 들어오면 바로 처리
+	if (lValue == 0) {
+		pcBuffer[0] = '0';
+		pcBuffer[1] = '\0';
+		return 1;
+	}
+
+	// 만약 음수이면 출력 버퍼에 '-'를 추가하고 양수로 변환
+	if (lValue < 0) {
+		i = 1;
+		pcBuffer[0] = '-';
+		lValue = -lValue;
+	} else {
+		i = 0;
+	}
+
+	// 버퍼에 1의 자리부터 10, 100, 1000 ...의 자리 순서로 숫자 삽입
+	for (; lValue > 0; i++) {
+		pcBuffer[i] = '0' + lValue % 10;
+		lValue = lValue / 10;
+	}
+	pcBuffer[i] = '\0';
+
+	// 버퍼에 들어있는 문자열을 뒤집어서 ... 1000, 100, 10, 1의 자리 순서로 변경
+	if (pcBuffer[0] == '-') {
+		// 음수인 경우는 부호를 제외하고 문자열을 뒤집음
+		kReverseString(&(pcBuffer[1]));
+	} else {
+		kReverseString(pcBuffer);
+	}
+
+	return i;
+}
+
+/**
+ *  itoa() 함수의 내부 구현
+ */
+static int itoa(long lValue, char* pcBuffer, int iRadix) {
+	int iReturn;
+
+	switch (iRadix) {
+	// 16진수
+	case 16:
+		iReturn = kHexToString(lValue, pcBuffer);
+		break;
+
+		// 10진수 또는 기타
+	case 10:
+	default:
+		iReturn = kDecimalToString(lValue, pcBuffer);
+		break;
+	}
+
+	return iReturn;
+}
+
+
+
+/**
+ *  vsprintf() 함수의 내부 구현
+ *      버퍼에 포맷 문자열에 따라 데이터를 복사
+ */
+static int vsprintf(char* pcBuffer, const char* pcFormatString, va_list ap) {
+	QWORD i, j, k;
+	int iBufferIndex = 0;
+	int iFormatLength, iCopyLength;
+	char* pcCopyString;
+	QWORD qwValue;
+	int iValue;
+	double dValue;
+
+	BYTE temp;
+
+	// 포맷 문자열의 길이를 읽어서 문자열의 길이만큼 데이터를 출력 버퍼에 출력
+	iFormatLength = strlen(pcFormatString);
+	for (i = 0; i < iFormatLength; i++) {
+		// %로 시작하면 데이터 타입 문자로 처리
+		if (pcFormatString[i] == '%') {
+			// % 다음의 문자로 이동
+			i++;
+			switch (pcFormatString[i]) {
+			// 문자열 출력
+			case 's':
+				// 가변 인자에 들어있는 파라미터를 문자열 타입으로 변환
+				pcCopyString = ( char* ) ( va_arg(ap, char* ));
+				iCopyLength = strlen(pcCopyString);
+				// 문자열의 길이만큼을 출력 버퍼로 복사하고 출력한 길이만큼
+				// 버퍼의 인덱스를 이동
+				memcpy(pcBuffer + iBufferIndex, pcCopyString, iCopyLength);
+				iBufferIndex += iCopyLength;
+				break;
+
+				// 문자 출력
+			case 'c':
+				// 가변 인자에 들어있는 파라미터를 문자 타입으로 변환하여
+				// 출력 버퍼에 복사하고 버퍼의 인덱스를 1만큼 이동
+				pcBuffer[ iBufferIndex ] = ( char ) ( va_arg( ap, int ) );
+				iBufferIndex++;
+				break;
+
+				// 정수 출력
+			case 'd':
+			case 'i':
+				// 가변 인자에 들어있는 파라미터를 정수 타입으로 변환하여
+				// 출력 버퍼에 복사하고 출력한 길이만큼 버퍼의 인덱스를 이동
+				iValue = ( QWORD ) ( va_arg( ap, QWORD ) );
+				iBufferIndex += itoa(iValue, pcBuffer + iBufferIndex, 10);
+				break;
+
+				// 4바이트 Hex 출력
+			case 'x':
+			case 'X':
+				// 가변 인자에 들어있는 파라미터를 DWORD 타입으로 변환하여
+				// 출력 버퍼에 복사하고 출력한 길이만큼 버퍼의 인덱스를 이동
+				qwValue = (DWORD) (va_arg(ap, DWORD)) &0xFFFFFFFF;
+				iBufferIndex += itoa(qwValue, pcBuffer + iBufferIndex, 16);
+				break;
+
+				// 8바이트 Hex 출력
+			case 'q':
+			case 'Q':
+			case 'p':
+				// 가변 인자에 들어있는 파라미터를 QWORD 타입으로 변환하여
+				// 출력 버퍼에 복사하고 출력한 길이만큼 버퍼의 인덱스를 이동
+				qwValue = (QWORD)(va_arg(ap, QWORD));
+				iBufferIndex += itoa(qwValue, pcBuffer + iBufferIndex, 16);
+				break;
+
+				// 소수점 둘째 자리까지 실수를 출력
+			case 'f':
+				dValue = ( double) ( va_arg( ap, double ) );
+				// 셋째 자리에서 반올림 처리
+				dValue += 0.005;
+				// 소수점 둘째 자리부터 차례로 저장하여 버퍼를 뒤집음
+				pcBuffer[iBufferIndex] = '0' + (QWORD) (dValue * 100) % 10;
+				pcBuffer[iBufferIndex + 1] = '0' + (QWORD) (dValue * 10) % 10;
+				pcBuffer[iBufferIndex + 2] = '.';
+				for (k = 0;; k++) {
+					// 정수 부분이 0이면 종료
+					if (((QWORD) dValue == 0) && (k != 0)) {
+						break;
+					}
+					pcBuffer[iBufferIndex + 3 + k] = '0'
+							+ ((QWORD) dValue % 10);
+					dValue = dValue / 10;
+				}
+				pcBuffer[iBufferIndex + 3 + k] = '\0';
+				// 값이 저장된 길이만큼 뒤집고 길이를 증가시킴
+				kReverseString(pcBuffer + iBufferIndex);
+				iBufferIndex += 3 + k;
+				break;
+
+				// 위에 해당하지 않으면 문자를 그대로 출력하고 버퍼의 인덱스를
+				// 1만큼 이동
+			default:
+				pcBuffer[iBufferIndex] = pcFormatString[i];
+				iBufferIndex++;
+				break;
+			}
+		}
+		// 일반 문자열 처리
+		else {
+			// 문자를 그대로 출력하고 버퍼의 인덱스를 1만큼 이동
+			pcBuffer[iBufferIndex] = pcFormatString[i];
+			iBufferIndex++;
+		}
+	}
+
+	// NULL을 추가하여 완전한 문자열로 만들고 출력한 문자의 길이를 반환
+	pcBuffer[iBufferIndex] = '\0';
+	return iBufferIndex;
+}
+
+
+/*
+ * (Kernel) Print a formatted string.
+ * %s, %c, %x, %d, %%
+ *
+ * @param fmt Formatted string to print
+ * @param ... Additional arguments to format
+ */
+
+
+static spinlock_t spinlock_printk;
+
+void printk(const char *str, ...) {
+	va_list ap;
+	char buf[1024];
+	int next_offset;
+
+	va_start(ap, str);
+	vsprintf(buf, str, ap);
+	va_end(ap);
+
+	spinlock_lock(&spinlock_printk); // lock
+	next_offset = console_print_str(buf);
+	set_cursor(next_offset % CONSOLE_WIDTH, next_offset / CONSOLE_WIDTH);
+	spinlock_unlock(&spinlock_printk); // unlock
+}
+
+int sprintf(char * buf, const char *fmt, ...) {
+	va_list args;
+	int out;
+
+	va_start(args, fmt);
+	out = vasprintf(buf, fmt, args);
+	va_end(args);
+
+	return out;
+}
+

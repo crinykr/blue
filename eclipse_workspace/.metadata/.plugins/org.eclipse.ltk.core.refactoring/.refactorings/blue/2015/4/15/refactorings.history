@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">&#x0A;<refactoring comment="Rename resource &apos;blue/src/kernel/cpu/Copy of fault.c&apos; to &apos;syscall.c&apos;" description="Rename resource &apos;Copy of fault.c&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="src/kernel/cpu/Copy of fault.c" name="syscall.c" stamp="1428221856862" updateReferences="true"/>&#x0A;<refactoring comment="Rename resource &apos;blue/src/kernel/cpu/Copy of fault.h&apos; to &apos;syscall.h&apos;" description="Rename resource &apos;Copy of fault.h&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="src/kernel/cpu/Copy of fault.h" name="syscall.h" stamp="1428221921726" updateReferences="true"/>
+</session>

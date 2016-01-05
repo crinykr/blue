@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
+		<item value="false" key="isRegEx"/>
+		<item value="" key="selection"/>
+		<item value="true" key="casesensitive"/>
+		<item value="false" key="incremental"/>
+		<item value="true" key="wrap"/>
+		<item value="false" key="wholeword"/>
+		<list key="findhistory">
+			<item value="intrrr"/>
+			<item value="proc"/>
+			<item value="KERNEL_STACK_SIZE"/>
+			<item value="setup_task"/>
+			<item value="create_task"/>
+			<item value="..."/>
+			<item value="va"/>
+			<item value="list_init"/>
+		</list>
+		<list key="replacehistory">
+			<item value="child"/>
+			<item value="__asm__ __volatile__"/>
+			<item value="result"/>
+			<item value="screen"/>
+			<item value="data"/>
+			<item value="offset"/>
+			<item value="random_val"/>
+			<item value="value2"/>
+		</list>
+	</section>
+	<section name="org.eclipse.ui.texteditor.FindReplaceDialog_dialogBounds">
+		<item value="273" key="DIALOG_WIDTH"/>
+		<item value="1|Ubuntu|9.0|0|GTK|1|" key="DIALOG_FONT_NAME"/>
+		<item value="412" key="DIALOG_HEIGHT"/>
+		<item value="78" key="DIALOG_Y_ORIGIN"/>
+		<item value="820" key="DIALOG_X_ORIGIN"/>
+	</section>
+</section>

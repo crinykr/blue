@@ -1,0 +1,14 @@
+#ifndef SYSCALL_H_
+#define SYSCALL_H_
+
+#include "types.h"
+#include "sys.h"
+#include "multiprocessor.h"
+
+// ISA IRQ count is 16
+// So blue handled just 16 IRQ
+#define INTR_MAX_COUNT 16
+
+void dsyscall_handler(regs_t *r);
+
+#endif /* SYSCALL_H_ */

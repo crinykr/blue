@@ -1,0 +1,193 @@
+/*
+ * page.c
+ *
+ *  Created on: 2014. 8. 17.
+ *      Author: criny
+ */
+
+#include "page.h"
+#include "sys.h"
+#include "util.h"
+#include "asm_util.h"
+#include "dynamic.h"
+
+//static BYTE *frames; // bitmap data to handle used page
+//static DWORD nframes;
+
+pml4_t *kernel_pml4;
+
+// make page management bitmap structure
+void paging_init(QWORD memsize_kb) {
+	QWORD i, j;
+
+//	nframes = memsize / 4;
+//	frames = kmalloc((nframes + 7) / 8);
+//	memset(frames, 0, (nframes + 7) / 8);
+
+// make genuine kernel page tables by using calculating memory size
+
+// trim early mapping
+	*(QWORD*) (&EARLY_PGT) = NULL;
+
+	kernel_pml4 = &EARLY_PGT;
+}
+
+// Get PAGE DIRECTORY ENTRY virtual address
+// : just allocate space for page directory not page entry
+//   page entry is allocated in "alloc_frame"
+
+// Post Condition : page table physical address must not be "0"
+pde_t* get_page(QWORD vaddr, int make, pml4_t *pml4) {
+	QWORD a, b;
+	vaddr &= 0xffffffffffff;
+
+	// if has PDPT
+	if (pml4->entry[OFFSET_PML4(vaddr)].addr) {
+		a = pml4->entry[OFFSET_PML4(vaddr)].addr;
+		a <<= 12;
+		a += PAGE_OFFSET;
+
+		// if has PD
+		if (((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].addr) {
+			b = ((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].addr;
+			b <<= 12;
+			b += PAGE_OFFSET;
+
+			return &((pd_t*) b)->entry[OFFSET_PD(vaddr)];
+		}
+		// if not has PD, make PD
+		else if (make) {
+			b = kmalloc_a_4kb(sizeof(pd_t));
+			memset(b, 0, sizeof(pd_t));
+			b -= PAGE_OFFSET;
+			b >>= 12;
+
+			((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].addr = b;
+			((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].present = 1;
+			((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].rw = 1;
+			((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].user = 1;
+
+			b <<= 12;
+			b += PAGE_OFFSET;
+
+			return &((pd_t*) b)->entry[OFFSET_PD(vaddr)];
+		} else {
+			return 0;
+		}
+	}
+	// if not has PDPT, make PDPT and PD
+	else if (make) {
+		// make PDPT
+		a = kmalloc_a_4kb(sizeof(pdpt_t));
+		memset(a, 0, sizeof(pdpt_t));
+		a -= PAGE_OFFSET;
+		a >>= 12;
+
+		pml4->entry[OFFSET_PML4(vaddr)].addr = a;
+		pml4->entry[OFFSET_PML4(vaddr)].present = 1;
+		pml4->entry[OFFSET_PML4(vaddr)].rw = 1;
+		pml4->entry[OFFSET_PML4(vaddr)].user = 1;
+
+		a <<= 12;
+		a += PAGE_OFFSET;
+
+		// make PD
+		b = kmalloc_a_4kb(sizeof(pd_t));
+		memset(b, 0, sizeof(pd_t));
+		b -= PAGE_OFFSET;
+		b >>= 12;
+
+		((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].addr = b;
+		((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].present = 1;
+		((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].rw = 1;
+		((pdpt_t*) a)->entry[OFFSET_PDPT(vaddr)].user = 1;
+
+		b <<= 12;
+		b += PAGE_OFFSET;
+
+		return &((pd_t*) b)->entry[OFFSET_PD(vaddr)];
+
+	} else {
+		return 0;
+	}
+}
+
+void alloc_frame(pde_t *page, int is_kernel, int is_writeable) {
+	QWORD vaddr, index;
+
+	vaddr = kmalloc_a_2mb(0x200000);
+	index = (vaddr - PAGE_OFFSET) >> 21;
+
+	page->present = 1;
+	page->rw = (is_writeable == 1) ? 1 : 0;
+	page->user = (is_kernel == 1) ? 0 : 1;
+	page->addr = index;
+}
+
+void switch_pml4(pml4_t *pml4_vaddr) {
+	load_cr3((QWORD) pml4_vaddr - PAGE_OFFSET);
+}
+
+/*
+ * Clone a page directory and its contents.
+ *
+ */
+pml4_t * clone_directory(pml4_t * src) {
+	int i, phys;;
+
+	/* Allocate a new page directory */
+	pml4_t * pml4 = (pml4_t *) kmalloc_a_4kb()(sizeof(pml4_t));
+	memset(pml4, 0, sizeof(pml4_t));
+
+
+	for (i = 0; i < 1024; ++i) {
+		/* Copy each table */
+		if (!src->tables[i]
+				|| (uintptr_t) src->tables[i] == (uintptr_t) 0xFFFFFFFF) {
+			continue;
+		}
+		if (kernel_directory->tables[i] == src->tables[i]) {
+			/* Kernel tables are simply linked together */
+			dir->tables[i] = src->tables[i];
+			dir->physical_tables[i] = src->physical_tables[i];
+		} else {
+			if (i * 0x1000 * 1024 < SHM_START) {
+				/* User tables must be cloned */
+				uintptr_t phys;
+				dir->tables[i] = clone_table(src->tables[i], &phys);
+				dir->physical_tables[i] = phys | 0x07;
+			}
+		}
+	}
+	return dir;
+}
+
+//DWORD first_frame(void) {
+//	DWORD i, j;
+//
+//	for (i = 0; i < INDEX_FROM_BIT(nframes); ++i) {
+//		if (frames[i] != 0xFFFFFFFF) {
+//			for (j = 0; j < 32; ++j) {
+//				uint32_t testFrame = 0x1 << j;
+//				if (!(frames[i] & testFrame)) {
+//					return i * 0x20 + j;
+//				}
+//			}
+//		}
+//	}
+//
+//	kprintf(
+//			"\033[1;37;41mWARNING: System claims to be out of usable memory, which means we probably overwrote the page frames.\033[0m\n");
+//
+//#if 0
+//	signal_t * sig = kmalloc(sizeof(signal_t));
+//	sig->handler = current_process->signals.functions[SIGSEGV];
+//	sig->signum = SIGSEGV;
+//	handle_signal((process_t *)current_process, sig);
+//#endif
+//
+//	STOP;
+//
+//	return -1;
+//}
+

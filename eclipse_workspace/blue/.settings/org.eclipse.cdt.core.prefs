@@ -1,0 +1,6 @@
+eclipse.preferences.version=1
+environment/project/cdt.managedbuild.toolchain.gnu.base.403112180/VMLINUZ/delimiter=\:
+environment/project/cdt.managedbuild.toolchain.gnu.base.403112180/VMLINUZ/operation=append
+environment/project/cdt.managedbuild.toolchain.gnu.base.403112180/VMLINUZ/value=/works/blue/vmlinuz
+environment/project/cdt.managedbuild.toolchain.gnu.base.403112180/append=true
+environment/project/cdt.managedbuild.toolchain.gnu.base.403112180/appendContributed=true

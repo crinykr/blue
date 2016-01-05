@@ -1,0 +1,10 @@
+#ifndef SYSCALL_H_
+#define SYSCALL_H_
+
+#include "types.h"
+#include "sys.h"
+#include "multiprocessor.h"
+
+void syscall_handler(regs_t *r);
+
+#endif /* SYSCALL_H_ */
