@@ -1,0 +1,154 @@
+// kernel header rules
+// '*' marked is required to modify
+
+Offset	Proto	Name		Meaning
+/Size
+
+01F1/1	ALL(1	setup_sects	*The size of the setup in sectors
+01F2/2	ALL	root_flags	If set, the root is mounted readonly
+01F4/4	2.04+(2	syssize		*The size of the 32-bit code in 16-byte paras
+01F8/2	ALL	ram_size	DO NOT USE - for bootsect.S use only
+01FA/2	ALL	vid_mode	Video mode control
+01FC/2	ALL	root_dev	*Default root device number
+01FE/2	ALL	boot_flag	0xAA55 magic number
+0200/2	2.00+	jump		Jump instruction
+0202/4	2.00+	header		Magic signature "HdrS"
+0206/2	2.00+	version		Boot protocol version supported
+0208/4	2.00+	realmode_swtch	Boot loader hook (see below)
+020C/2	2.00+	start_sys_seg	The load-low segment (0x1000) (obsolete)
+020E/2	2.00+	kernel_version	Pointer to kernel version string
+0210/1	2.00+	type_of_loader	Boot loader identifier
+0211/1	2.00+	loadflags	Boot protocol option flags
+0212/2	2.00+	setup_move_size	Move to high memory size (used with hooks)
+0214/4	2.00+	code32_start	*Boot loader hook (see below)
+0218/4	2.00+	ramdisk_image	initrd load address (set by boot loader)
+021C/4	2.00+	ramdisk_size	initrd size (set by boot loader)
+0220/4	2.00+	bootsect_kludge	DO NOT USE - for bootsect.S use only
+0224/2	2.01+	heap_end_ptr	Free memory after setup end
+0226/1	2.02+(3 ext_loader_ver	Extended boot loader version
+0227/1	2.02+(3	ext_loader_type	Extended boot loader ID
+0228/4	2.02+	cmd_line_ptr	32-bit pointer to the kernel command line
+022C/4	2.03+	ramdisk_max	Highest legal initrd address
+0230/4	2.05+	kernel_alignment Physical addr alignment required for kernel
+0234/1	2.05+	relocatable_kernel Whether kernel is relocatable or not
+0235/1	2.10+	min_alignment	Minimum alignment, as a power of two
+0236/2	N/A	pad3		Unused
+0238/4	2.06+	cmdline_size	Maximum size of the kernel command line
+023C/4	2.07+	hardware_subarch Hardware subarchitecture
+0240/8	2.07+	hardware_subarch_data Subarchitecture-specific data
+0248/4	2.08+	payload_offset	Offset of kernel payload
+024C/4	2.08+	payload_length	Length of kernel payload
+0250/8	2.09+	setup_data	64-bit physical pointer to linked list
+				of struct setup_data
+0258/8	2.10+	pref_address	Preferred loading address
+0260/4	2.10+	init_size	Linear memory required during initialization
+
+
+//////// after grub 32mode jump //////////
+VBoxDbg> r
+eax=0008c000 ebx=00000000 ecx=00016a67 edx=00000063 esi=0008c000 edi=00000000
+eip=00100000 esp=0007fed4 ebp=0007fefc iopl=0 nv up di pl zr na po nc
+cs={0008 base=00000000 limit=ffffffff flags=c09b} dr0=00000000 dr1=00000000
+ds={0010 base=00000000 limit=ffffffff flags=c093} dr2=00000000 dr3=00000000
+es={0010 base=00000000 limit=ffffffff flags=c093} dr6=ffff0ff0 dr7=00000400
+fs={0010 base=00000000 limit=ffffffff flags=c093} cr0=00000011 cr2=00000000
+gs={0010 base=00000000 limit=ffffffff flags=c093} cr3=00000000 cr4=00000000
+ss={0010 base=00000000 limit=ffffffff flags=c093} cr8=00000000
+gdtr=0fc7bf20:001f  idtr=00000000:0000  eflags=00200046
+ldtr={0000 base=00000000 limit=0000ffff flags=0082}
+tr  ={0000 base=00000000 limit=0000ffff flags=008b}
+sysenter={cs=0000 eip=00000000 esp=00000000}
+fcw=037f fsw=0000 ftw=ffff mxcsr=1f80 mxcsr_mask=ffff
+u: error: DBGCCmdHlpVarToDbgfAddr failed on '0008:00100000 L 0': VERR_SELECTOR_NOT_PRESENT
+
+VBoxDbg> dg
+0010 CodeER Bas=00000000 Lim=fffff000 DPL=0 P  NA G BIG AVL=0 L=0
+0018 DataRW Bas=00000000 Lim=fffff000 DPL=0 P  NA G BIG AVL=0 L=0
+0020 VERR_INVALID_SELECTOR
+
+VBoxDbg> di
+0000 not within the IDT
+
+VBoxDbg> dt
+dt: error: 0000 is not a TSS selector. (type=0)
+
+VBoxDbg> dl
+0000 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0008 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0010 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0018 ConfER Bas=f053f000 Lim=0000e9dc DPL=3 P  A        AVL=0 L=0
+0020 Tss32A Bas=f087f000 Lim=0000fea5 DPL=3 P  NB       AVL=0 R=0
+0028 Trap16 Sel:Off=f000:f000ff53     DPL=3 P 
+0030 Trap16 Sel:Off=f000:f000e746     DPL=3 P 
+0038 ConfER Bas=f053f000 Lim=0000ef57 DPL=3 P  A        AVL=0 L=0
+0040 CodeEO Bas=f04dc000 Lim=00000022 DPL=3 P  NA       AVL=0 L=0
+0048 Tss16B Bas=f0fef000 Lim=0000f841 DPL=3 P  B        AVL=0 R=0
+0050 CodeEO Bas=f059f000 Lim=0000e739 DPL=3 P  NA       AVL=0 L=0
+0058 Trap32 Sel:Off=f000:f000e82e     DPL=3 P 
+0060 Int16  Sel:Off=f000:f000f0a4     DPL=3 P 
+0068 ConfER Bas=f053f000 Lim=0000fe6e DPL=3 P  A        AVL=0 L=0
+0070 ConfER Bas=f053f000 Lim=0000efed DPL=3 P  A        AVL=0 L=0
+0080 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0088 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0090 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0098 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00a0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00a8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00b0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00b8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00c0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00c8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00d0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00d8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00e0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00e8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00f0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+00f8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0110 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0118 ConfER Bas=f0539fc0 Lim=0000004d DPL=3 P  A        AVL=0 L=0
+0120 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0128 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0130 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0138 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0140 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0148 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0150 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0158 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0160 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0168 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0170 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+0178 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+01a0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+01a8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+01b0 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+01b8 ConfER Bas=f053f000 Lim=0000ff53 DPL=3 P  A        AVL=0 L=0
+01c0 ConfER Bas=f053f000 Lim=0000fe8f DPL=3 P  A        AVL=0 L=0
+01c8 ConfER Bas=f053f000 Lim=0000e746 DPL=3 P  A        AVL=0 L=0
+01d0 LDT    Bas=f0caf000 Lim=0000f8a9 DPL=3 P  B        AVL=0 R=0
+01d8 Trap16 Sel:Off=f000:f000f8d7     DPL=3 P 
+1f60 Ill-0  00 00 00 00 00 c0 76 1f   DPL=2 P 
+1f70 Ill-0  00 80 08 00 00 c0 80 1f   DPL=2 P 
+1f78 Ill-0  60 32 04 11 00 80 d4 03   DPL=0 P 
+1f80 Ill-0  ba 1f f0 00 00 80 d4 03   DPL=0 P 
+1fe8 Ill-D  00 00 46 00 9f 8d 00 00   DPL=0 P
+
+
+
+
+///////// after AP start ////////////
+eax=00000000 ebx=00000000 ecx=00000000 edx=00000600 esi=00000000 edi=00000000
+eip=00000000 esp=00000000 ebp=00000000 iopl=0 nv up di pl nz na pe nc
+cs={1000 base=00010000 limit=0000ffff flags=009b} dr0=00000000 dr1=00000000
+ds={0000 base=00000000 limit=0000ffff flags=0093} dr2=00000000 dr3=00000000
+es={0000 base=00000000 limit=0000ffff flags=0093} dr6=ffff0ff0 dr7=00000400
+fs={0000 base=00000000 limit=0000ffff flags=0093} cr0=60000010 cr2=00000000
+gs={0000 base=00000000 limit=0000ffff flags=0093} cr3=00000000 cr4=00000000
+ss={0000 base=00000000 limit=0000ffff flags=0093} cr8=00000000
+gdtr=00000000:ffff  idtr=00000000:ffff  eflags=00000002
+ldtr={0000 base=00000000 limit=0000ffff flags=0082}
+tr  ={0000 base=00000000 limit=0000ffff flags=008b}
+sysenter={cs=0000 eip=00000000 esp=00000000}
+fcw=037f fsw=0000 ftw=ffff mxcsr=1f80 mxcsr_mask=ffff
+1000:00000000 eb fe                   jmp -002h (00000h)
+
+
