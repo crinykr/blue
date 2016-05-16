@@ -1,5 +1,5 @@
 modprobe nbd
-qemu-nbd -c /dev/nbd0 /works/kiwi/vbox/kiwi/kiwi.vdi
+qemu-nbd -c /dev/nbd0 /works/oss/kiwi/vbox/kiwi/kiwi.vdi
 #kpartx -a /dev/nbd0
 mount /dev/nbd0p1 /mnt/tmp
 
