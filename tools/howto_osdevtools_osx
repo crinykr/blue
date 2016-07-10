@@ -1,0 +1,80 @@
+# build os making tools for max os x 10.11.5 (OS X El Capitan)
+# target tools : binutils, gcc, nasm
+
+reference url1 : http://nayuta.net/64비트_멀티코어_OS_원리와_구조/OS_X에서_개발환경_구축하기
+reference url2 : http://macworld.hjsong.net/73
+
+////////////////////////////////////
+// [1] install essential tools
+////////////////////////////////////
+1. command line developer tools
+$ xcode-select --install
+
+2. homebrew
+$ /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+3. wget
+$ brew install wget
+
+5. nasm
+$ brew install nasm
+
+////////////////////////////////////
+// [2] common build setting
+////////////////////////////////////
+$ export TARGET=x86_64-pc-linux
+$ export PREFIX=/Users/criny/Desktop/os_dev_tools/root
+$ export PATH=$prefix/bin:$PATH
+
+////////////////////////////////////
+// [3] binutils
+////////////////////////////////////
+$ wget http://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.gz
+$ tar xf binutils-2.26.tar.gz
+$ cd binutils-2.26
+$ mkdir build
+$ cd build
+$ ../configure --target=$TARGET --prefix=$PREFIX --enable-64-bit-bfd --disable-shared --disable-nls
+$ make configure-host
+$ make LDFLAGS="-all-static" CFLAGS="-Wno-error=deprecated-declarations"
+$ make install
+
+
+////////////////////////////////////
+// [4] gcc
+////////////////////////////////////
+$ wget http://ftp.gnu.org/gnu/gcc/gcc-6.1.0/gcc-6.1.0.tar.gz
+$ tar xf gcc-6.1.0.tar.gz
+$ cd gcc-6.1.0
+$ ./contrib/download_prerequisites
+$ mkdir build
+$ cd build
+$ ../configure --target=$TARGET --prefix=$PREFIX --disable-nls --enable-languages=c --without-headers --disable-shared --enable-multilib
+$ make configure-host
+$ make all-gcc
+$ make install-gcc
+
+////////////////////////////////////
+// [5] mount vdi image ext2/3/4
+////////////////////////////////////
+1. vdi mounting tool
+download "Paragon VMDK Mounter for Mac® OS X"
+
+2. ext4 file system supporting tool
+download "Paragon ExtFS for Mac® 10"
+
+3. attach vdi
+vdmutil attach -nomount kiwi.vdi
+
+4. mount ext4 file system
+diskutil mount -mountPoint /mnt/kiwi /dev/disk1s1
+
+5. unmount ext4 file system
+diskutil unmount /mnt/kiwi
+
+
+
+
+
+
+
