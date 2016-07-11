@@ -1,0 +1,74 @@
+doc rule
+$ : run command
+# : action description
+<<< ~ >>> : input text in between "<<<" and ">>>"
+@ : comment start indicator
+
+************************************
+* nfs setting
+************************************
+1. host nfs setting
+$ vi /etc/exports
+<<<
+/works/vm_share/banana/linux-3.15.3 192.168.101.0/255.255.255.0(rw,sync,no_root_squash)
+>>>
+
+$ service nfs start
+
+# enable "mountd","nfs","rpc-bind" service in firewall GUI program
+or
+$ iptables -F
+
+2. target nfs setting (ubuntu 10.04.4)
+$ apt-get install nfs-common
+
+$ mount 192.168.101.1:/works/vm_share/banana/linux-3.15.3 linux-3.15.3
+
+$ vi /etc/fstab
+<<<
+192.168.101.1:/works/vm_share/banana/linux-3.15.3 /home/criny/linux-3.15.3 nfs rsize=8192,wsize=8192,timeo=14,intr
+>>>
+
+$ mount -all
+
+************************************
+* set env
+************************************
+$ vi /etc/group
+<<<
+disk:criny
+vboxusers:criny
+>>>
+
+************************************
+* mount virtual img for use dev
+************************************
+$ dd if=/dev/zero of=vimg bs=1M count=64
+$ losetup -f @check available loop device
+$ losetup /dev/loop0 /works/blue/vbox/blue/hdd.img 
+$ VBoxManage internalcommands createrawvmdk -filename vdisk.vmdk -rawdisk /dev/loop0
+
+************************************
+* mount vdi : for blue kernel devel, start from here
+************************************
+1. fedora
+$ yum install nbd qemu-img
+$ modprobe nbd
+
+$ qemu-nbd -c /dev/nbd0 /works/kiwi/vbox/kiwi/kiwi.vdi
+$ kpartx -a /dev/nbd0
+$ mount /dev/mapper/nbd0p1 /mnt/tmp
+
+$ umount /mnt/tmp
+$ kpartx -d /dev/nbd0
+$ qemu-nbd -d /dev/nbd0
+
+2. ubuntu
+$ apt-get install qemu-utils
+$ modprobe nbd
+
+$ qemu-nbd -c /dev/nbd0 /works/kiwi/vbox/kiwi/kiwi.vdi
+$ mount /dev/nbd0p1 /mnt/tmp
+
+$ umount /mnt
+$ qemu-nbd -d /dev/nbd0
