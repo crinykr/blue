@@ -1,10 +1,5 @@
-// - Goal
-// 1. 최종적으로 일단 init을 돌리야되
-// 2. 파이썬을 올려보자 아니면 자바를...
-
 // - bugs 0329
 // 4번 pit 작동안함...화면에 카운터값 안찍힘
-
 // 인터럽트 분산 에러잡기
 // 가변인자 다섯번째 부터 제대로 전달되지 않음... 호출 후 해석의 문제인듯
 
@@ -12,11 +7,13 @@
 // 1. 가상주소 구현
 // 2. 포식스 프로세스 모델. 스레드,
 // 3. 포크, execve(로더), 태스크 종료,
-
 // 4. IPC : 시그널 , 파이프 , 공유메모리
 // 5. 가상파일시스템, proc파일 시스템등
-
 // 6. 나머지 시스템콜을 위한 베이스
+
+// - History
+// 16.8.2
+// OS 전문가가 되어야지
 
 #include "types.h"
 #include "keyboard.h"
@@ -40,31 +37,7 @@
 #include "task.h"
 #include "scheduler.h"
 
-//////////////////////////////////////////////////
-//
-// 15.09.07
-//
-// 1. 우선 완벽한 RTOS 를 완성
-//    - 파일 시스템 포함
-// 2. 가상 메모리 추가와 함께 일반OS로 바꾸기
-//
-//////////////////////////////////////////////////
-
-int pit_sched_start;
-
-__attribute__((always_inline))
-inline int syscall_fork() {
-	__asm__ __volatile__("movq $0x0, %rax");
-	__asm__ __volatile__("int $99");
-	return CANDY;
-}
-
-__attribute__((always_inline))
-inline int syscall_schedule() {
-	__asm__ __volatile__("movq $0x1, %rax");
-	__asm__ __volatile__("int $99");
-	return CANDY;
-}
+extern void test_thread();
 
 void main_bp(void) {
 	machine_init();
@@ -80,34 +53,12 @@ void main_bp(void) {
 
 	be_a_init();
 
-	pit_sched_start = 1;
-
 	enable_intr();
 
-	// temp routine
-	{
-		static int global_test_i;
+	// run init program
+	test_thread();
 
-		if (syscall_fork() > 0) {
-			while (1) {
-				printk("{%}} parent : name(%s) core(%d))!@#$\n", global_test_i++,
-						get_cur_task(get_core_num())->name,
-						get_cur_task(get_core_num())->id);
-				//syscall_schedule();
-			}
-		} else {
-			//syacall_execve();
-
-			while (1) {
-				printk("{%d}} child : name(%s) core(%d)\n", global_test_i++,
-						get_cur_task(get_core_num())->name,
-						get_cur_task(get_core_num())->id);
-				//syscall_schedule();
-			}
-		}
-
-		//builtin_shell(); // execve
-	}
+	_BARRIER_;
 }
 
 extern int ap_on_count;
@@ -125,5 +76,5 @@ void main_ap(void) {
 	disable_intr();
 
 	while (1)
-		; //schedule();
+		;
 }

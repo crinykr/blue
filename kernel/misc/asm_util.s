@@ -168,8 +168,7 @@ switch_context:
 
 
 hlt:
-;    pause
-;	hlt
+	hlt
     ret
 
 
@@ -252,7 +251,6 @@ enable_global_lapic:
     ret
 
 pause:
-	mov rax, 0x12341234 ; pause magic num
     pause
     ret
 

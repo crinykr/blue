@@ -23,7 +23,7 @@ void common_intr_handler(regs_t *r) {
 	{
 		char tmp_str[30];
 		static int tmp_intr_count = 0;
-		sprintf(tmp_str, "[%d]}} intrrrr rising@@ : num[%d] core[%d]",
+		sprintf(tmp_str, "[%d] interrupt rising : num[%d] core[%d]",
 				++tmp_intr_count, r->int_no, get_core_num());
 		dbg_console_printxy(0, 0, tmp_str);
 	}
@@ -49,7 +49,6 @@ void common_intr_handler(regs_t *r) {
 	else if (irq < IRQ_SYSCALL) {
 		if (irq != IRQ_PIT) // if not PIT INTR
 			intr_balancing(irq); // criny:here
-
 		irq_ack();
 	}
 	// if SYSTEM CALL

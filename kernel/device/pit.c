@@ -8,9 +8,6 @@ extern int pit_sched_start;
 void pit_handler() {
 	if (get_core_num() == 0)
 		jiffies++; // increase jiffies
-
-	if (pit_sched_start)
-		do_simple_schedule();
 }
 
 // 1Ghz = 1,000,000,000 rise per 1 sec
