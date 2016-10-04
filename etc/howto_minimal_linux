@@ -1,0 +1,95 @@
+#############
+# make minimal linux workspace for browse kernel source code
+# last updated : 16/9/18
+#############
+
+*********************************
+* trim kernel soruce : remove useless files
+*********************************
+[1] make build config file
+make allnoconfig
+
+[2] get file list
+strace -f -e open,stat make bzImage 2>this
+("strace -f -e trace=file" is also usefull in somecase)
+
+[3] get effective file list
+cat this |
+grep 'open(\|stat(' |
+grep -v 'open("/\|stat("/' |
+cut -d'"' -f2 |
+sort -u |
+grep -v '\.o$\|\.tmp$' > this2
+
+[4] copy files to the new place
+while read line 
+do 
+    cp --parents linux-4.7.4/$line tmp 
+done < ./this2
+
+[5] remove object files
+find . -name "*.o" -exec rm -rf {} \;
+
+[6] remove empty folder
+find . -type d -empty -delete
+(to print, use "find . -type d -empty -print")
+
+*********************************
+* eclipse workspace setting
+*********************************
+[1] include
+arch/x86/include
+include
+include/generated/autoconf.h
+
+#############
+# make minimal kernel for running ubuntu on virtual box
+# last updated : 16/9/18
+#############
+
+*********************************
+* target
+*********************************
+// target machine :
+- virtualbox
+
+- processor : 64bit / single core
+- mem : 256MB
+
+- hdd : SCSI/IDE 10GB
+- nic : amd pcnet32
+- display : 
+
+// target boot loader : grub2_1.98-1ubuntu13
+
+// target linux kernel : 3.15.3
+
+// target linux env : ubuntu 10.04.4
+- no quota
+@ /etc/fstab : add "noquota" option at root fs mount line
+- ext2
+
+// host env : fedora 20
+
+*********************************
+* kernel build
+*********************************
+// gcc --version
+gcc (GCC) 4.8.3 20140624 (Red Hat 4.8.3-1)
+Copyright (C) 2013 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+// kernel configure
+- 100HZ time tick, no tickless kernel
+- proessor : 32bit, SMP disable, no preempt, no high mem, no pae
+- ethernet : pcnet32
+- fs : ext2 
+@ no quota
+@ no jounal options
+- slab
+- no bounce buffer
+- no cgroup
+- no wchan
+- no acpi : especially no thermal controller
+- no port-IO delay
