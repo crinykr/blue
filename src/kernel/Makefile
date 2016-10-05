@@ -1,9 +1,8 @@
 # Set build utils
-PFX = /Users/criny/Desktop/os_dev_tools/root/bin/x86_64-pc-linux-
 AS = nasm -f elf64
-CC = $(PFX)gcc -w -m64 -ffreestanding -mcmodel=large -std=c99 -Icpu -Idevice -Ids -Ifs -Igen -Imem -Imisc -Isys -Iinit
-LD = $(PFX)ld -melf_x86_64 -T blue.ld -nostdlib
-OBJCOPY = $(PFX)objcopy -j .text -j .data -j .rodata -j .bss --set-section-flags .bss=alloc,load,contents -S -O binary
+CC = gcc -w -m64 -ffreestanding -mcmodel=large -std=c99 -Icpu -Idevice -Ids -Ifs -Igen -Imem -Imisc -Isys -Iinit
+LD = ld -melf_x86_64 -T blue.ld -nostdlib
+OBJCOPY = objcopy -j .text -j .data -j .rodata -j .bss --set-section-flags .bss=alloc,load,contents -S -O binary
 
 # All of the core parts of the kernel are built directly.
 KERNEL_OBJS  = $(patsubst %.c,%.o,$(wildcard ./*/*.c))
